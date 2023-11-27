@@ -4,6 +4,8 @@
 from cmu_graphics import *
 import math
 import random
+from PIL import Image
+import os, pathlib
 
 ### Classes
 
@@ -11,16 +13,28 @@ class Bee:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        self.dx = 0
+        self.dy = 0
         self.target = None
         self.targetX = None
         self.targetY = None
         self.pollenStash = []
         self.radius = 30
-        self.color = 'red'
+        self.spritesRight = []
+        self.spritesLeft = []
+        self.spriteCounter = 0
+        self.spriteStepCounter = 0
  
-    def drawBee(self):
-        drawCircle(self.x, self.y, self.radius, fill = self.color)
-
+    def drawBee(self, app):
+        #bee image from gamedeveloperstudio.com
+        #https://www.gamedeveloperstudio.com/graphics/viewgraphic.php?page-name=Bee-sprite&item=1f4d185v1k0y341h2g
+        if self.dx >= 0: #draw right facing
+            sprite = app.beeSpritesRight[self.spriteCounter]
+            drawImage(sprite, self.x, self.y, align = 'center')
+        else: #draw left facing
+            sprite = app.beeSpritesLeft[self.spriteCounter]
+            drawImage(sprite, self.x, self.y, align = 'center')
+        
     def drawPollenOnFeet(self): 
         for idx in range(len(self.pollenStash)):
             circleX = self.x - self.radius + 10*idx
@@ -68,24 +82,26 @@ class Bee:
         #step depends on distance: faster when farther from target
         #just divide distance by constant so it constantly rescales
         if self.targetX != None:
-            dx = abs(self.x - self.targetX)
-            dy = abs(self.y - self.targetY)
-            if self.targetX > self.x:
-                self.x += dx/20
-            else:
-                self.x -= dx/20
-            if self.targetY > self.y:
-                self.y += dy/20
-            else:
-                self.y -= dy/20
+            self.dx = self.targetX - self.x
+            self.dy = self.targetY - self.y
+            self.x += self.dx/15
+            self.y += self.dy/15
+    
+    def iterateSpriteCounter(self):
+        self.spriteStepCounter += 1
+        if self.spriteStepCounter >= 2: #this is where fly speed will change
+            self.spriteCounter = (1 + self.spriteCounter) % 6
+            self.spriteStepCounter = 0
 
     def beeOnStep(self, app):
+        self.iterateSpriteCounter()
         #pick target. This updates self.target
         self.helperChooseTarget(app)
         if self.target != None:
             self.targetX = self.target.x
             self.targetY = self.target.y
             self.beeMove()
+        
 
     def gatherPollen(self, flower):
         #add correct color pollen to stash
@@ -93,6 +109,9 @@ class Bee:
         self.pollenStash += [pollenType]
         #flower now has no pollen
         flower.hasPollen = False
+        #remove oldest pollen if over 6
+        if len(self.pollenStash) > 6:
+            self.pollenStash.pop(0)
 
     def givePollen(self, flower):
         pollenType = flower.color
@@ -106,7 +125,7 @@ class Bee:
     def pollinate(self, app):
         for flower in app.flowers:
             #check if close enough to give/gather pollen
-            if Bee.getDistance(self.x, self.y, flower.x, flower.y) < 20:   
+            if Bee.getDistance(self.x, self.y, flower.x, flower.y) < 30:   
                 #if flower is type givesPollen and has pollen: gather pollen
                 if flower.type == 'givesPollen' and flower.hasPollen:
                     self.gatherPollen(flower)
@@ -117,7 +136,6 @@ class Bee:
 class Player(Bee): #subclass of Bee
     def __init__(self, x, y, targetX, targetY):
         super().__init__(x,y)
-        self.color = 'orange'
         self.health = 100
         
     def drawPollenStash(self):
@@ -133,6 +151,7 @@ class Player(Bee): #subclass of Bee
 
     def playerOnStep(self):
         self.beeMove()
+        self.iterateSpriteCounter()
     
 class Flower:
     def __init__(self, x, y, type, color):
@@ -145,8 +164,6 @@ class Flower:
         self.radius = 15
         #used in sinusoidal movement pattern
         self.startX = x 
-        self.stepY = 1
-        self.stepX = 1
         self.onScreen = True
       
     def drawFlower(self):
@@ -169,26 +186,9 @@ class Flower:
                            fill = self.color, opacity= 25)
     
     def flowerMove(self):
-        self.y -= self.stepY
-        self.x += self.stepX
-        rightBound = self.startX + 100
-        leftBound = self.startX - 100
-        if self.x >= rightBound:
-            self.stepX *= -1
-        elif self.x <= leftBound:
-            self.stepX *= -1
-
-        #trying to scale the speed and failing
-        # self.y -= self.stepY
-        # self.x += self.stepX
-        # rightBound = self.startX + 100
-        # leftBound = self.startX - 100
-        # if self.x >= rightBound:
-        #     dx = abs(self.x - leftBound)
-        #     self.stepX *= -1 * (math.ceil(dx/50))
-        # elif self.x <= leftBound:
-        #     dx = abs(self.x - rightBound)
-        #     self.stepX *= -1 * (math.ceil(dx/50))
+        xOffset = 100 *  (math.sin(.01 * self.y))
+        self.y -= 2
+        self.x = self.startX + xOffset
 
     def updateOnScreen(self, app): 
         if self.x < 0 - self.radius or self.x > app.width + self.radius:
@@ -211,7 +211,7 @@ class Flower:
         
 ### App Helper Functions
 
-#y needs to be specified for starting flowers
+# y needs to be specified for starting flowers
 def generateFlower(app, y):
     x = random.randrange(app.width)
     type = random.choice(['givesPollen', 'needsPollen'])
@@ -219,7 +219,7 @@ def generateFlower(app, y):
     return Flower(x, y, type, color)
 
 def generateFlowerWrapper(app):
-    y = app.height - 30
+    y = app.height + 30
     newFlower = generateFlower(app, y)
     app.flowers += [newFlower]
 
@@ -232,12 +232,26 @@ def clearOldFlowers(app):
         flowerIdx = app.flowers.index(flower)
         app.flowers.pop(flowerIdx)
 
+def getSprites(animal, direction): 
+        spritesList = []
+        for i in range(6):
+            frame = Image.open('%s_FLY_%s/%s.png' % (animal, direction, i+1))
+            sprite = CMUImage(frame)
+            spritesList.append(sprite)
+        return spritesList
+
 ### Animation functions
 def onAppStart(app):
     app.width = 700
     app.height = 700
     app.playerX = app.width/2
     app.playerY = app.height/2
+    app.beeSpritesRight = getSprites('BEE', 'RIGHT')
+    app.beeSpritesLeft = getSprites('BEE', 'LEFT')
+    print(app.beeSpritesRight)
+    #once I find bird images I'll update these functions:
+    app.birdSpritesRight = getSprites('BEE', 'RIGHT')
+    app.birdSpritesLeft = getSprites('BEE', 'LEFT')
     app.targetX = None
     app.targetY = None
     app.player = Player(app.playerX, app.playerY, app.targetX, app.targetY)
@@ -245,28 +259,13 @@ def onAppStart(app):
     app.flowers = [generateFlower(app, random.randrange(app.height)),
                    generateFlower(app, random.randrange(app.height)),
                    generateFlower(app, random.randrange(app.height)),
-                   generateFlower(app, random.randrange(app.height)),]
+                   generateFlower(app, random.randrange(app.height)),
+                   ]
     app.helperBees = [Bee(random.randrange(app.width), 
                             random.randrange(app.height)),
                       Bee(random.randrange(app.width), 
                             random.randrange(app.height))]
     app.onStepCounter = 0
-
-def redrawAll(app):
-    drawRect(0, 0, app.width, app.height, fill = 'lightGreen')
-    for flower in app.flowers:
-        flower.drawFlower()
-    for helper in app.helperBees:
-        helper.drawBee()
-        helper.drawPollenOnFeet()
-    app.player.drawBee()
-    app.player.drawPollenStash()
-    app.player.drawPollenOnFeet()
-    app.player.drawHealthBar(app)
-    
-def onMouseMove(app, mouseX, mouseY):
-    app.player.targetX = mouseX
-    app.player.targetY = mouseY
 
 def onStep(app):
     app.player.playerOnStep() #move bee towards cursor
@@ -278,11 +277,26 @@ def onStep(app):
         helper.pollinate(app)
     #slower steps
     app.onStepCounter += 1
-    if app.onStepCounter % 60 == 0:
+    if app.onStepCounter % 50 == 0:
         generateFlowerWrapper(app)
         #also clear old flowers
         clearOldFlowers(app)
+
+def redrawAll(app):
+    drawRect(0, 0, app.width, app.height, fill = 'lightGreen')
+    for flower in app.flowers:
+        flower.drawFlower()
+    for helper in app.helperBees:
+        helper.drawBee(app)
+        helper.drawPollenOnFeet()
+    app.player.drawBee(app)
+    app.player.drawPollenStash()
+    app.player.drawPollenOnFeet()
+    app.player.drawHealthBar(app)
     
+def onMouseMove(app, mouseX, mouseY):
+    app.player.targetX = mouseX
+    app.player.targetY = mouseY
     #health bar decrements
     app.player.health -= .05
 
