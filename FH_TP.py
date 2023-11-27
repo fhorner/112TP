@@ -232,6 +232,8 @@ def clearOldFlowers(app):
         flowerIdx = app.flowers.index(flower)
         app.flowers.pop(flowerIdx)
 
+#I referenced this post for how to loop through multiple files and open each
+#https://stackoverflow.com/questions/55446133/opening-multiple-images-on-pil-with-a-for-loop
 def getSprites(animal, direction): 
         spritesList = []
         for i in range(6):
