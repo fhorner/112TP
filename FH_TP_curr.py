@@ -28,6 +28,7 @@ class Bee:
         self.spritesRight = getSprites(self.type, 'RIGHT')
         self.spritesLeft = getSprites(self.type, 'LEFT')
         self.id = x 
+        self.baseSpeed = 8 if self.type == 'WASP' else 6
 
     def __hash__(self):
         return hash(self.id)
@@ -63,45 +64,39 @@ class Bee:
         if self.target != None:
             #if it gives pollen but doesn't have pollen, drop as target
             if (self.target.type == 'givesPollen' and
-               not self.target.hasPollen):
+            not self.target.hasPollen):
                 self.target = None
             #if it needs pollen but already has pollen, drop as target
             elif (self.target.type == 'needsPollen' and 
-                  self.target.hasPollen):
+                self.target.hasPollen):
                     self.target = None
             #if target off screen, drop as target
-            elif not self.target.onScreen:
+            elif self.target.y < 0 - self.target.radius:
                 self.target = None
-            #if target is same as other bee, drop it
-            #this is not working as expected
-            for bee in app.helperBees:
-                #if it's not you
-                if (self.id != bee.id and 
-                    #and it has the same target as you
-                    self.target == bee.target):
-                    #drop the target
-                    self.target = None
-                    break
-
         elif self.target == None:
             smallestDistance = None
             bestFlower = None
             #loop through flowers
             for flower in app.flowers:
             #if ungathered or unpollinated, get distance
-                if ((flower.type == 'givesPollen' and
-                     flower.hasPollen) or 
-                    (flower.type == 'needsPollen' and 
-                    not flower.hasPollen and 
+                if ((flower.type == 'givesPollen' and flower.hasPollen) or 
+                    (flower.type == 'needsPollen' and not flower.hasPollen and 
                     #additionally check that bee has correct pollen 
                     flower.color in self.pollenStash)):
-                    currDistance = Bee.getDistance(self.x, self.y, flower.x, flower.y)
+                    currDistance = Bee.getDistance(self.x, self.y, 
+                                                   flower.x, flower.y)
                     if (smallestDistance == None or 
                         smallestDistance > currDistance):
                         smallestDistance = currDistance
                         bestFlower = flower
             #smallest distance becomes new target
             self.target = bestFlower
+        #if target is same as other bee, drop it
+        for bee in app.helperBees:
+            if (self.id != bee.id and #if it's not you and same target as you
+                self.target == bee.target):
+                    self.target = None #drop the target
+                    break
 
     def beeMove(self, app):
         #step depends on distance: faster when farther from target
@@ -111,7 +106,6 @@ class Bee:
             self.dy = self.targetY - (self.y + 20) #offset so aims with feet
             newX = self.x + self.dx/10
             newY = self.y + self.dy/10
-            #these have slightly different offsets based on size of sprite
             if self.radius < newX and newX < app.width - self.radius:
                 self.x = newX
             if self.radius < newY and newY < app.height - self.radius:
@@ -121,15 +115,13 @@ class Bee:
     #https://piazza.com/class/lkq6ivek5cg1bc/post/2231
     def iterateSpriteCounter(self):
         self.spriteStepCounter += 1
-        #sprites need different base speeds since different num of frames
-        modSpeed = 8 if self.type == 'WASP' else 6
         #speed is distance per step
         if self.targetX == None:
             speed = 1
         else:
             speed = Bee.getDistance(self.x, self.y, self.targetX, self.targetY)
         #this is where fly speed will change
-        if self.spriteStepCounter >= modSpeed - math.log(speed): 
+        if self.spriteStepCounter >= self.baseSpeed - math.log(speed): 
             self.spriteCounter = (1 + self.spriteCounter)%len(self.spritesRight)
             self.spriteStepCounter = 0
 
@@ -161,12 +153,14 @@ class Bee:
             #flower now has pollen
             flower.hasPollen = True
             if self.type == 'BEE':
-                self.health = (self.health + 5) % 100
+                if self.health + 5 > 100:
+                    self.health = 100
+                else: self.health += 5
 
     def pollinate(self, app):
         for flower in app.flowers:
             #check if close enough to give/gather pollen
-            if Bee.getDistance(self.x, self.y+50, flower.x, flower.y) < 40:   
+            if Bee.getDistance(self.x, self.y+50, flower.x, flower.y) < self.radius:   
                 #if flower is type givesPollen and has pollen: gather pollen
                 if flower.type == 'givesPollen' and flower.hasPollen:
                     self.gatherPollen(flower)
@@ -194,14 +188,14 @@ class Player(Bee): #subclass of Bee
 
     def drawHealthBar(self, app):
         length = (app.width/3) * (self.health/100)
-        drawRect(app.width*.6, 15, length, 15, fill = 'darkRed')
+        drawRect(app.width*.6, 15, length, 15, fill = 'fireBrick')
+        drawRect(app.width*.6, 15, app.width/3, 15, fill = None, border = 'Black')
 
     def checkKilledByWasp(self, app):
         for bee in app.helperBees:
             distance = Bee.getDistance(self.x, self.y, bee.x, bee.y)
             if distance < self.radius + bee.radius:
                 app.gameStatus = 'lost'
-
 
     def playerOnStep(self, app):
         self.beeMove(app)
@@ -223,9 +217,7 @@ class Flower:
         #starting hasPollen determined by type
         self.hasPollen = True if type == 'givesPollen' else False
         self.radius = 15
-        #used in sinusoidal movement pattern
         self.startX = x 
-        self.onScreen = True
         self.id = x
 
     def __eq__(self, other):
@@ -240,17 +232,20 @@ class Flower:
             if self.hasPollen:
                 drawCircle(self.x, self.y, self.radius + 6, 
                            fill = self.color, opacity=50)
-                drawCircle(self.x, self.y, self.radius + 3, fill = 'lightGreen')
+                drawCircle(self.x, self.y, self.radius + 3, 
+                           fill = 'darkSeaGreen')
                 drawCircle(self.x, self.y, self.radius, fill = self.color)
             else:
                 drawCircle(self.x, self.y, self.radius, fill = self.color)
         elif self.type == 'needsPollen':
             if not self.hasPollen:
                 drawCircle(self.x, self.y, self.radius, fill = self.color)
-                drawCircle(self.x, self.y, self.radius - 5, fill = 'lightGreen')
+                drawCircle(self.x, self.y, self.radius - 5, 
+                           fill = 'darkSeaGreen')
             else:
                 drawCircle(self.x, self.y, self.radius + 5, fill = self.color)
-                drawCircle(self.x, self.y, self.radius, fill = 'lightGreen')
+                drawCircle(self.x, self.y, self.radius, 
+                           fill = 'darkSeaGreen')
                 drawCircle(self.x, self.y, self.radius, 
                            fill = self.color, opacity= 25)
     
@@ -258,29 +253,95 @@ class Flower:
         xOffset = 100 *  (math.sin(.01 * self.y))
         self.y -= 2
         self.x = self.startX + xOffset
-
-    def updateOnScreen(self, app): 
-        if self.x < 0 - self.radius or self.x > app.width + self.radius:
-            self.onScreen = False
-        elif self.y < 0 - self.radius or self.y > app.height + self.radius:
-            self.onScreen = False
     
     def updateRadius(self): #based on pollination status
         if self.type == 'givesPollen':
-            if self.hasPollen: self.radius = 15
-            else: self.radius = 20
+            if self.hasPollen: 
+                self.radius = 15
+            else:
+                newRadius = 30
+                return newRadius
         if self.type == 'needsPollen':
-            if self.hasPollen: self.radius = 20
-            else: self.radius = 15
+            if not self.hasPollen: 
+                self.radius = 20
+            else: 
+                newRadius = 30
+                return newRadius
 
     def flowerOnStep(self, app):
         self.flowerMove()
-        self.updateOnScreen(app)
-        self.updateRadius()
+        newRadius = self.updateRadius()
+        if newRadius != None and app.onStepCounter % 3 == 0:
+            if self.radius < newRadius:
+                    self.radius += 1
         
+### Main Animation Functions --------------------------------------------------
+def onAppStart(app):
+    app.gameStatus = "start" #start, inPlay, lost
+    app.width = 800
+    app.height = 800
+    app.flowerColors = ['teal', 'lightCoral', 'gold']
+    resetApp(app)
+
+def onStep(app):
+    if app.gameStatus == 'inPlay':
+        app.player.playerOnStep(app) #move bee towards cursor
+        app.player.pollinate(app) 
+        for flower in app.flowers:
+            flower.flowerOnStep(app)
+        for helper in app.helperBees:
+            helper.beeOnStep(app)
+            helper.pollinate(app)
+        #slower steps
+        app.onStepCounter += 1
+        if app.onStepCounter % 40 == 0:
+            generateFlowerWrapper(app)
+            #also clear old flowers
+            clearOldFlowers(app)
+            
+def redrawAll(app):
+    drawRect(0, 0, app.width, app.height, fill = 'darkSeaGreen')
+    if app.gameStatus == 'start':
+        drawGameStart(app)
+    if app.gameStatus == 'inPlay':
+        drawInPlay(app)
+    if app.gameStatus == 'lost':
+        drawInPlay(app)
+        drawYouLost(app)
+        
+def onMouseMove(app, mouseX, mouseY):
+    app.player.targetX = mouseX
+    app.player.targetY = mouseY
+
+def onKeyPress(app, key):
+    if app.gameStatus == 'inPlay':
+        if key == 'w':
+            #add new wasp (without overwriting existing)
+            getHelperBees(app, 1)
+        if key == 'm':
+            #minus a wasp
+            app.helperBees.pop()
+    if key == 'r':
+        app.gameStatus = 'inPlay'
+        resetApp(app)
+    if key == 's' and app.gameStatus == 'start':
+        app.gameStatus = 'inPlay'
+
 ### App Helper Functions ------------------------------------------------------
 
 # y needs to be specified for starting flowers
+
+def resetApp(app):
+    app.onStepCounter = 0
+    #these are just starting
+    app.targetX = None
+    app.targetY = None
+    app.player = Player(app.width/2, app.height/2)
+    app.flowers = []
+    initialFlowers(app, 1)
+    app.helperBees = []
+    getHelperBees(app, 0)
+
 def generateFlower(app, y):
     x = random.randrange(app.width)
     type = random.choice(['givesPollen', 'needsPollen'])
@@ -303,7 +364,8 @@ def clearOldFlowers(app):
 
 def getHelperBees(app, numBees):
     for i in range(numBees):
-        newBee = Bee(random.randrange(app.width), random.randrange(app.height))
+        newBee = Bee(random.randrange(app.width), 
+                     random.randrange(app.height - 100))
         app.helperBees += [newBee]
 
 def initialFlowers(app, numFlowers):
@@ -321,6 +383,44 @@ def getSprites(animal, direction):
             spritesList.append(sprite)
         return spritesList
 
+def drawGameStart(app):
+    for flower in app.flowers:
+        flower.drawFlower()
+    drawRect(app.width/2, app.height/2, app.width * .7, app.width * .7,
+            align = 'center', fill = 'black', opacity = 50)
+    drawRect(app.width/2, app.height/2, app.width * .7, app.width * .7,
+            align = 'center', fill = None, border = 'White', borderWidth = 5)
+    drawLabel('The Bee Game', app.width/2, app.height/3, font = 'arial',
+              size = 24, bold = True, fill = 'white')
+    drawLabel('Pollinate the flowers to keep your health up!',  
+              app.width/2, app.height/2, font = 'montserrat', 
+              size = 18, fill = 'white')
+    drawLabel("Press 'w' to add wasp enemies, and 'm' to subtract a wasp." , 
+               app.width/2, app.height/2 + 30, font = 'montserrat',
+              size = 18, fill = 'white')
+    drawLabel("Don't let them eat you!" , app.width/2, app.height/2 + 60, 
+              font = 'montserrat', size = 18, fill = 'white')
+    drawLabel("Press 's' to start." , app.width/2, app.height/2 +90, 
+              font = 'montserrat', size = 18, fill = 'white')
+    #add images
+    bee = Image.open('BEE_FLY_RIGHT/1.png')
+    bee = CMUImage(bee)
+    drawImage(bee, app.width*.25, app.height*.25, align = 'center')
+    wasp = Image.open('WASP_FLY_LEFT/1.png')
+    wasp = CMUImage(wasp)
+    drawImage(wasp, app.width*.75, app.height*.75, align = 'center')
+
+def drawInPlay(app):
+    for flower in app.flowers:
+        flower.drawFlower()
+    for helper in app.helperBees:
+        helper.drawBee()
+        helper.drawPollenOnFeet()
+    app.player.drawBee()
+    app.player.drawPollenStash()
+    app.player.drawPollenOnFeet()
+    app.player.drawHealthBar(app)
+
 def drawYouLost(app):
     drawRect(app.width/2, app.height/2, app.width * .5, app.width * .5,
             align = 'center', fill = 'black', opacity = 50,
@@ -330,95 +430,10 @@ def drawYouLost(app):
     drawLabel('Press r to reset.', app.width/2, app.height/2 + 25, 
             size = 18, fill = 'white')
 
-def drawGameStart(app):
-    drawRect(app.width/2, app.height/2, app.width * .7, app.width * .7,
-            align = 'center', fill = 'black', opacity = 50,
-            border = 'black', borderWidth = 3)
-    drawLabel('The Bee Game', app.width/2, app.height/3, size = 24, 
-            bold = True, fill = 'white')
-    drawLabel('Pollinate the flowers to keep your health up!', app.width/2, app.height/2, 
-            size = 18, fill = 'white')
-    drawLabel("Press 'w' to add wasp enemies, and 'm' to subtract a wasp." , app.width/2, app.height/2 + 30, 
-            size = 18, fill = 'white')
-    drawLabel("Don't let them eat you!" , app.width/2, app.height/2 + 60, 
-            size = 18, fill = 'white')
-    drawLabel("Press 's' to start." , app.width/2, app.height/2 +90, 
-            size = 18, fill = 'white')
 
-def resetApp(app):
-    app.onStepCounter = 0
-    app.playerX = app.width/2
-    app.playerY = app.height/2
-    app.targetX = None
-    app.targetY = None
-    app.player = Player(app.playerX, app.playerY)
-    app.flowers = []
-    initialFlowers(app, 6)
-    app.helperBees = []
-    getHelperBees(app, 0)
-    
 
-### Main Animation Functions --------------------------------------------------
-def onAppStart(app):
-    app.gameStatus = "start" #start, inPlay, lost
-    app.width = 800
-    app.height = 800
-    app.flowerColors = ['blue', 'pink', 'yellow']
-    resetApp(app)
-
-def onStep(app):
-    #if not app.gameOver:
-    app.player.playerOnStep(app) #move bee towards cursor
-    app.player.pollinate(app) 
-    for flower in app.flowers:
-        flower.flowerOnStep(app)
-    for helper in app.helperBees:
-        helper.beeOnStep(app)
-        helper.pollinate(app)
-    #slower steps
-    app.onStepCounter += 1
-    if app.onStepCounter % 40 == 0:
-        generateFlowerWrapper(app)
-        #also clear old flowers
-        clearOldFlowers(app)
-            
-def redrawAll(app):
-    drawRect(0, 0, app.width, app.height, fill = 'lightGreen')
-    if app.gameStatus == 'start':
-        drawGameStart(app)
-    if app.gameStatus == 'inPlay':
-        for flower in app.flowers:
-            flower.drawFlower()
-        for helper in app.helperBees:
-            helper.drawBee()
-            helper.drawPollenOnFeet()
-        app.player.drawBee()
-        app.player.drawPollenStash()
-        app.player.drawPollenOnFeet()
-        app.player.drawHealthBar(app)
-    if app.gameStatus == 'lost':
-        drawYouLost(app)
-        
-def onMouseMove(app, mouseX, mouseY):
-    app.player.targetX = mouseX
-    app.player.targetY = mouseY
-
-def onKeyPress(app, key):
-    if key == 'w':
-        #add new wasp (without overwriting existing)
-        getHelperBees(app, 1)
-    if key == 'm':
-        #minus a wasp
-        app.helperBees.pop()
-    if key == 'r':
-        app.gameStatus == 'inPlay'
-        resetApp(app)
-    if key == 's' and app.gameStatus == 'start':
-        print(app.gameStatus)
-        app.gameStatus = 'inPlay'
-        print(app.gameStatus)
-    
 def main():
     runApp()
     
 main()
+
