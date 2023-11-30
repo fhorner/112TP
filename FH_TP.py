@@ -94,7 +94,6 @@ class Bee:
             self.dy = self.targetY - (self.y + 20) #offset so aims with feet
             self.x += self.dx/15
             self.y += self.dy/15
-            print(self.dx/15)
     
     #sprite animation based on Mike's tutorial:
     #https://piazza.com/class/lkq6ivek5cg1bc/post/2231
@@ -267,8 +266,8 @@ def getSprites(animal, direction):
 
 ### Animation functions
 def onAppStart(app):
-    app.width = 700
-    app.height = 700
+    app.width = 900
+    app.height = 900
     app.playerX = app.width/2
     app.playerY = app.height/2
     app.beeSpritesRight = getSprites('BEE', 'RIGHT')

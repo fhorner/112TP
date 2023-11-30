@@ -6,7 +6,9 @@ import math
 import random
 from PIL import Image
 
-### Classes
+# Classes
+
+## Bee Class ------------------------------------------------------------------
 
 class Bee: 
     def __init__(self, x, y):
@@ -172,6 +174,8 @@ class Bee:
                 elif flower.type == 'needsPollen' and not flower.hasPollen:
                     self.givePollen(flower)
 
+## Player Subclass ------------------------------------------------------------
+
 class Player(Bee): #subclass of Bee
     def __init__(self, x, y):
         super().__init__(x,y)
@@ -196,7 +200,7 @@ class Player(Bee): #subclass of Bee
         for bee in app.helperBees:
             distance = Bee.getDistance(self.x, self.y, bee.x, bee.y)
             if distance < self.radius + bee.radius:
-                app.gameOver = True
+                app.gameStatus = 'lost'
 
 
     def playerOnStep(self, app):
@@ -206,8 +210,10 @@ class Player(Bee): #subclass of Bee
         #health bar decrements
         self.health -= .05
         if self.health <= 0:
-            app.gameOver = True
-    
+            app.gameOver = 'lost'
+
+## Flower Class ---------------------------------------------------------------
+
 class Flower:
     def __init__(self, x, y, type, color, app):
         self.x = x
@@ -220,7 +226,7 @@ class Flower:
         #used in sinusoidal movement pattern
         self.startX = x 
         self.onScreen = True
-        self.id = app.onStepCounter
+        self.id = x
 
     def __eq__(self, other):
         if isinstance(other, Flower):
@@ -272,7 +278,7 @@ class Flower:
         self.updateOnScreen(app)
         self.updateRadius()
         
-### App Helper Functions
+### App Helper Functions ------------------------------------------------------
 
 # y needs to be specified for starting flowers
 def generateFlower(app, y):
@@ -289,7 +295,7 @@ def generateFlowerWrapper(app):
 def clearOldFlowers(app):
     toRemove = []
     for flower in app.flowers:
-        if flower.y < -30:
+        if flower.y < 0 - flower.radius:
             toRemove += [flower]
     for flower in toRemove:
         flowerIdx = app.flowers.index(flower)
@@ -299,6 +305,11 @@ def getHelperBees(app, numBees):
     for i in range(numBees):
         newBee = Bee(random.randrange(app.width), random.randrange(app.height))
         app.helperBees += [newBee]
+
+def initialFlowers(app, numFlowers):
+    for i in range(numFlowers):
+            newFlower = generateFlower(app, random.randrange(app.height))
+            app.flowers += [newFlower]
 
 #I referenced this post for how to loop through multiple files and open each
 #https://stackoverflow.com/questions/55446133/opening-multiple-images-on-pil-with-a-for-loop
@@ -310,6 +321,30 @@ def getSprites(animal, direction):
             spritesList.append(sprite)
         return spritesList
 
+def drawYouLost(app):
+    drawRect(app.width/2, app.height/2, app.width * .5, app.width * .5,
+            align = 'center', fill = 'black', opacity = 50,
+            border = 'black', borderWidth = 3)
+    drawLabel('You lost! :(', app.width/2, app.height/2, size = 24, 
+            bold = True, fill = 'white')
+    drawLabel('Press r to reset.', app.width/2, app.height/2 + 25, 
+            size = 18, fill = 'white')
+
+def drawGameStart(app):
+    drawRect(app.width/2, app.height/2, app.width * .7, app.width * .7,
+            align = 'center', fill = 'black', opacity = 50,
+            border = 'black', borderWidth = 3)
+    drawLabel('The Bee Game', app.width/2, app.height/3, size = 24, 
+            bold = True, fill = 'white')
+    drawLabel('Pollinate the flowers to keep your health up!', app.width/2, app.height/2, 
+            size = 18, fill = 'white')
+    drawLabel("Press 'w' to add wasp enemies, and 'm' to subtract a wasp." , app.width/2, app.height/2 + 30, 
+            size = 18, fill = 'white')
+    drawLabel("Don't let them eat you!" , app.width/2, app.height/2 + 60, 
+            size = 18, fill = 'white')
+    drawLabel("Press 's' to start." , app.width/2, app.height/2 +90, 
+            size = 18, fill = 'white')
+
 def resetApp(app):
     app.onStepCounter = 0
     app.playerX = app.width/2
@@ -317,75 +352,72 @@ def resetApp(app):
     app.targetX = None
     app.targetY = None
     app.player = Player(app.playerX, app.playerY)
-    app.flowers = [generateFlower(app, random.randrange(app.height)),
-                   generateFlower(app, random.randrange(app.height)),
-                   generateFlower(app, random.randrange(app.height)),
-                   generateFlower(app, random.randrange(app.height)),
-                   ]
+    app.flowers = []
+    initialFlowers(app, 6)
     app.helperBees = []
     getHelperBees(app, 0)
-    app.gameOver = False
+    
 
-### Animation functions
+### Main Animation Functions --------------------------------------------------
 def onAppStart(app):
-    app.width = 700
-    app.height = 700
+    app.gameStatus = "start" #start, inPlay, lost
+    app.width = 800
+    app.height = 800
     app.flowerColors = ['blue', 'pink', 'yellow']
     resetApp(app)
 
-   
-
 def onStep(app):
-    if not app.gameOver:
-        app.player.playerOnStep(app) #move bee towards cursor
-        app.player.pollinate(app) 
-        for flower in app.flowers:
-            flower.flowerOnStep(app)
-        for helper in app.helperBees:
-            helper.beeOnStep(app)
-            helper.pollinate(app)
-        #slower steps
-        app.onStepCounter += 1
-        if app.onStepCounter % 40 == 0:
-            generateFlowerWrapper(app)
-            #also clear old flowers
-            clearOldFlowers(app)
-
+    #if not app.gameOver:
+    app.player.playerOnStep(app) #move bee towards cursor
+    app.player.pollinate(app) 
+    for flower in app.flowers:
+        flower.flowerOnStep(app)
+    for helper in app.helperBees:
+        helper.beeOnStep(app)
+        helper.pollinate(app)
+    #slower steps
+    app.onStepCounter += 1
+    if app.onStepCounter % 40 == 0:
+        generateFlowerWrapper(app)
+        #also clear old flowers
+        clearOldFlowers(app)
+            
 def redrawAll(app):
     drawRect(0, 0, app.width, app.height, fill = 'lightGreen')
-    for flower in app.flowers:
-        flower.drawFlower()
-    for helper in app.helperBees:
-        helper.drawBee()
-        helper.drawPollenOnFeet()
-    app.player.drawBee()
-    app.player.drawPollenStash()
-    app.player.drawPollenOnFeet()
-    app.player.drawHealthBar(app)
-    if app.gameOver:
-        drawRect(app.width/2, app.height/2, app.width * .5, app.width * .5,
-                 align = 'center', fill = 'black', opacity = 50,
-                 border = 'black', borderWidth = 3)
-        drawLabel('You lost! :(', app.width/2, app.height/2, size = 24, 
-                  bold = True, fill = 'white')
-        drawLabel('Press r to reset.', app.width/2, app.height/2 + 25, 
-                  size = 18, fill = 'white')
-    
+    if app.gameStatus == 'start':
+        drawGameStart(app)
+    if app.gameStatus == 'inPlay':
+        for flower in app.flowers:
+            flower.drawFlower()
+        for helper in app.helperBees:
+            helper.drawBee()
+            helper.drawPollenOnFeet()
+        app.player.drawBee()
+        app.player.drawPollenStash()
+        app.player.drawPollenOnFeet()
+        app.player.drawHealthBar(app)
+    if app.gameStatus == 'lost':
+        drawYouLost(app)
+        
 def onMouseMove(app, mouseX, mouseY):
     app.player.targetX = mouseX
     app.player.targetY = mouseY
 
 def onKeyPress(app, key):
-    if key == 'b':
-        #add new wasp (without overwriting existing bees)
+    if key == 'w':
+        #add new wasp (without overwriting existing)
         getHelperBees(app, 1)
     if key == 'm':
         #minus a wasp
         app.helperBees.pop()
     if key == 'r':
+        app.gameStatus == 'inPlay'
         resetApp(app)
+    if key == 's' and app.gameStatus == 'start':
+        print(app.gameStatus)
+        app.gameStatus = 'inPlay'
+        print(app.gameStatus)
     
-
 def main():
     runApp()
     
