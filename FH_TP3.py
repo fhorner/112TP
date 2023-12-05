@@ -1,5 +1,7 @@
 # fhorner term project
 # Bee Game
+# Based on CMU 15-112 Scaffolded Bee Project:
+# https://docs.google.com/document/d/1RK2QOc11oxlUyyxkOA0AdzSdKWcCD-W9D18Xr_x65ms/edit#heading=h.hwp65jpeckcu
 
 from cmu_graphics import *
 import math
@@ -28,7 +30,7 @@ class Bee:
         self.spritesRight = getSprites(self.type, 'RIGHT')
         self.spritesLeft = getSprites(self.type, 'LEFT')
         self.id = x 
-        self.baseSpeed = 8 if self.type == 'WASP' else 6
+        self.baseSpeed =  8
 
     def __hash__(self):
         return hash(self.id)
@@ -104,8 +106,8 @@ class Bee:
         if self.targetX != None:
             self.dx = self.targetX - self.x
             self.dy = self.targetY - (self.y + 20) #offset so aims with feet
-            newX = self.x + self.dx/10
-            newY = self.y + self.dy/10
+            newX = self.x + self.dx/11
+            newY = self.y + self.dy/11
             if self.radius < newX and newX < app.width - self.radius:
                 self.x = newX
             if self.radius < newY and newY < app.height - self.radius:
@@ -178,6 +180,7 @@ class Player(Bee): #subclass of Bee
         self.spritesLeft = getSprites(self.type, 'LEFT')
         self.health = 100
         self.radius = 45 #approximate for sprite dimensions
+        self.baseSpeed = 6
         
     def drawPollenStash(self):
         for idx in range(len(self.pollenStash)):
@@ -187,9 +190,10 @@ class Player(Bee): #subclass of Bee
             drawCircle(circleX, circleY, 10, fill = self.pollenStash[idx])
 
     def drawHealthBar(self, app):
-        length = (app.width/3) * (self.health/100)
-        drawRect(app.width*.6, 15, length, 15, fill = 'fireBrick')
-        drawRect(app.width*.6, 15, app.width/3, 15, fill = None, border = 'Black')
+        if app.gameStatus == 'inPlay':
+            length = (app.width/3) * (self.health/100)
+            drawRect(app.width*.6, 15, length, 15, fill = 'fireBrick')
+            drawRect(app.width*.6, 15, app.width/3, 15, fill = None, border = 'Black')
 
     def checkKilledByWasp(self, app):
         for bee in app.helperBees:
@@ -204,7 +208,7 @@ class Player(Bee): #subclass of Bee
         #health bar decrements
         self.health -= .05
         if self.health <= 0:
-            app.gameOver = 'lost'
+            app.gameStatus = 'lost'
 
 ## Flower Class ---------------------------------------------------------------
 
@@ -249,9 +253,10 @@ class Flower:
                 drawCircle(self.x, self.y, self.radius, 
                            fill = self.color, opacity= 25)
     
+    #cite the scaffolded
     def flowerMove(self):
         xOffset = 100 *  (math.sin(.01 * self.y))
-        self.y -= 2
+        self.y -= 1.5
         self.x = self.startX + xOffset
     
     def updateRadius(self): #based on pollination status
@@ -316,8 +321,8 @@ def onMouseMove(app, mouseX, mouseY):
 def onKeyPress(app, key):
     if app.gameStatus == 'inPlay':
         if key == 'w':
-            #add new wasp (without overwriting existing)
-            getHelperBees(app, 1)
+            #add new wasp
+            getHelperBee(app)
         if key == 'm':
             #minus a wasp
             app.helperBees.pop()
@@ -329,18 +334,14 @@ def onKeyPress(app, key):
 
 ### App Helper Functions ------------------------------------------------------
 
-# y needs to be specified for starting flowers
-
 def resetApp(app):
     app.onStepCounter = 0
-    #these are just starting
     app.targetX = None
     app.targetY = None
     app.player = Player(app.width/2, app.height/2)
     app.flowers = []
-    initialFlowers(app, 1)
+    initialFlowers(app, 8)
     app.helperBees = []
-    getHelperBees(app, 0)
 
 def generateFlower(app, y):
     x = random.randrange(app.width)
@@ -362,11 +363,10 @@ def clearOldFlowers(app):
         flowerIdx = app.flowers.index(flower)
         app.flowers.pop(flowerIdx)
 
-def getHelperBees(app, numBees):
-    for i in range(numBees):
-        newBee = Bee(random.randrange(app.width), 
-                     random.randrange(app.height - 100))
-        app.helperBees += [newBee]
+def getHelperBee(app):
+    newBee = Bee(random.randrange(app.width), 
+                    random.randrange(app.height - 100))
+    app.helperBees += [newBee]
 
 def initialFlowers(app, numFlowers):
     for i in range(numFlowers):
